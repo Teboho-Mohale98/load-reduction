@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoadReduction — Load Shedding Manager</title>
+  <meta name="description" content="Track load shedding stages, your outage schedule and reduce your household electricity load." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9889;</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">&#9889;</span>
+      <div>
+        <h1>LoadReduction</h1>
+        <p class="tagline">Load shedding manager</p>
+      </div>
+    </div>
+    <div id="statusPill" class="status-pill">Stage 0</div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="card-head">
+        <h2>Current stage</h2>
+        <span class="hint">Select the active load shedding stage</span>
+      </div>
+      <div id="stageChips" class="chips"></div>
+      <div id="stageSummary" class="summary-box"></div>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>My outage schedule</h2>
+          <span class="hint">Pick your block</span>
+        </div>
+        <div id="blockChips" class="chips"></div>
+        <div id="nextOutage" class="next-outage"></div>
+        <ul id="outageList" class="outage-list"></ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Load calculator</h2>
+          <span class="hint">Stay under your breaker limit</span>
+        </div>
+
+        <div class="limit-row">
+          <label>
+            Main breaker (A)
+            <input type="number" id="breakerAmps" min="10" max="125" step="1" value="60" />
+          </label>
+          <label>
+            Voltage (V)
+            <input type="number" id="voltage" min="100" max="250" step="1" value="230" />
+          </label>
+          <label>
+            Battery (Wh)
+            <input type="number" id="batteryWh" min="0" step="50" value="500" />
+          </label>
+        </div>
+
+        <div class="gauge-wrap">
+          <div class="gauge-track">
+            <div id="gaugeBar" class="gauge-bar"></div>
+          </div>
+          <div class="gauge-labels">
+            <span id="gaugeText">0 W connected</span>
+            <span id="limitText">13 800 W limit</span>
+          </div>
+          <p id="gaugeWarning" class="gauge-warning"></p>
+        </div>
+
+        <form id="applianceForm" class="appliance-form">
+          <input type="text" id="apName" placeholder="Appliance (e.g. Geyser)" required />
+          <input type="number" id="apWatts" placeholder="Watts" min="1" required />
+          <input type="number" id="apQty" placeholder="Qty" min="1" value="1" />
+          <input type="number" id="apHours" placeholder="Hrs/day" min="0" max="24" step="0.5" value="1" />
+          <label class="essential-toggle" title="Keep running during an outage (inverter / battery / generator)">
+            <input type="checkbox" id="apEssential" />
+            Essential
+          </label>
+          <button type="submit" class="btn">Add</button>
+        </form>
+
+        <div class="table-wrap">
+          <table id="applianceTable">
+            <thead>
+              <tr>
+                <th>Appliance</th>
+                <th>Watts</th>
+                <th>Qty</th>
+                <th>Hrs</th>
+                <th>kWh/day</th>
+                <th class="th-essential">Ess.</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="applianceBody"></tbody>
+          </table>
+        </div>
+
+        <div id="totals" class="totals"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Reduction plan</h2>
+        <span class="hint">Auto-calculated from your appliance list</span>
+      </div>
+      <div class="plan-grid">
+        <div class="plan-item">
+          <span class="plan-value" id="planEssentialW">0 W</span>
+          <span class="plan-label">Essential load (survive an outage)</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-value" id="planRuntime">—</span>
+          <span class="plan-label">Battery runtime on essentials</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-value" id="planTrim">—</span>
+          <span class="plan-label">Switch off to fit breaker</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-value" id="planSaving">—</span>
+          <span class="plan-label">Daily usage</span>
+        </div>
+      </div>
+      <ul id="trimList" class="trim-list"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Load reduction tips</h2>
+      </div>
+      <div class="tips-grid">
+        <article class="tip"><h3>&#128167; Shift heavy loads</h3><p>Run the geyser, stove and washing machine outside peak windows (05:00–09:00 and 16:00–22:00).</p></article>
+        <article class="tip"><h3>&#9889; Drop the geyser breaker</h3><p>A 3 000 W geyser is your biggest load. Switch it off at the breaker and only heat when needed.</p></article>
+        <article class="tip"><h3>&#127769; Go LED</h3><p>Replace halogen downlights with LEDs — up to 80% less lighting load per room.</p></article>
+        <article class="tip"><h3>&#128246; Unplug standby</h3><p>Decoders, chargers and TVs on standby still draw 300–800 W across a house.</p></article>
+        <article class="tip"><h3>&#128267; Stagger kettle &amp; microwave</h3><p>Never run kettle + microwave + toaster together — each is 1 500–2 500 W on the same circuit.</p></article>
+        <article class="tip"><h3>&#9881;&#65039; Protect the fridge</h3><p>Keep the fridge/freezer closed — it stays cold for hours. Only essentials belong on your backup.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Simplified rotation model for planning purposes. Confirm official times with your municipality or Eskom sePush.</p>
+    <p>LoadReduction &copy; <span id="year"></span> — static app, data stays in your browser.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
