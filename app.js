@@ -1,6 +1,6 @@
 const PRIMARY_SLOTS = [6, 10, 14, 18];
-const SECONDARY_SLOTS = [4, 8, 12, 16];
-const SLOT_HOURS = 2;
+const SECONDARY_SLOTS = [3.5, 7.5, 11.5, 15.5];
+const SLOT_HOURS = 2.5;
 const BLOCKS = ["A", "B", "C", "D"];
 const STORAGE_KEY = "loadReductionState.v1";
 
@@ -37,11 +37,14 @@ function saveState() {
 }
 
 function fmtHour(h) {
-  return String(((h % 24) + 24) % 24).padStart(2, "0") + ":00";
+  const total = Math.round(h * 60);
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
 }
 
-function slotWindow(hour) {
-  return fmtHour(hour) + " – " + fmtHour(hour + SLOT_HOURS);
+function fmtNum(n) {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
 
 function blocksOffInSlot(slotIndex, perSlot) {
@@ -72,7 +75,7 @@ function outagesForBlock(blockIndex, stage) {
   const merged = [];
   raw.forEach((s) => {
     const last = merged[merged.length - 1];
-    if (last && last.end === s.start) last.end = s.end;
+    if (last && last.end >= s.start) last.end = Math.max(last.end, s.end);
     else merged.push({ ...s });
   });
   return merged;
@@ -93,9 +96,7 @@ function nextOutage(blockIndex, stage, fromDate) {
 
 function stageLoadHours(stage) {
   if (stage <= 0) return 0;
-  const primary = Math.min(stage, 4) * PRIMARY_SLOTS.length * SLOT_HOURS;
-  const secondary = Math.max(0, stage - 4) * SECONDARY_SLOTS.length * SLOT_HOURS;
-  return Math.round((primary + secondary) / 4);
+  return outagesForBlock(state.block, stage).reduce((sum, s) => sum + (s.end - s.start), 0);
 }
 
 function el(id) {
@@ -117,16 +118,21 @@ function renderStages() {
     wrap.appendChild(b);
   }
 
+  const hours = stageLoadHours(state.stage);
+  const nSlots = state.stage > 0 ? outagesForBlock(state.block, state.stage).length : 0;
+
   const pill = el("statusPill");
-  pill.textContent = state.stage === 0 ? "No load shedding" : "Stage " + state.stage + " active";
+  pill.textContent =
+    state.stage === 0 ? "No load shedding" : `Stage ${state.stage} active · ${fmtNum(hours)} h/day`;
   pill.className = "status-pill " + (state.stage === 0 ? "off" : "on");
 
-  const hours = stageLoadHours(state.stage);
   el("stageSummary").innerHTML =
     state.stage === 0
       ? "<strong>Power is on.</strong> Stage 0 — no load shedding scheduled right now. Use this time to charge devices and the geyser."
-      : `<strong>Stage ${state.stage}:</strong> block ${BLOCKS[state.block]} is off for roughly <strong>${hours} h per day</strong> in a ${Math.min(state.stage, 4)} × 2 h rotation. ` +
-        `All ${4} blocks rotate so every area shares the load reduction.`;
+      : `<strong>Stage ${state.stage}:</strong> block ${BLOCKS[state.block]} gets a <strong>${fmtNum(
+          hours
+        )}-hour load reduction</strong> per day (${nSlots} load reduction${nSlots > 1 ? "s" : ""}). ` +
+        `All 4 blocks rotate so every area shares the load reduction.`;
 }
 
 function renderBlocks() {
@@ -155,6 +161,7 @@ function renderSchedule() {
   list.innerHTML = "";
 
   if (stage === 0) {
+    el("reductionCount").textContent = "0 load reductions — stage 0";
     nextBox.innerHTML = '<span class="no-outage">&#10003; No outage — stage 0</span>';
     return;
   }
@@ -162,25 +169,35 @@ function renderSchedule() {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const todaySlots = outagesForBlock(block, stage);
+  const countBox = el("reductionCount");
 
   if (!todaySlots.length) {
+    countBox.textContent = "";
     nextBox.innerHTML = `<span class="no-outage">&#10003; Block ${BLOCKS[block]} is spared at stage ${stage} today</span>`;
     return;
   }
 
-  const next = nextOutage(block, stage, now);
-  const nextStartMin = next.dayOffset * 1440 + next.start * 60;
-  const diffMin = nextStartMin - nowMin;
+  const totalHours = todaySlots.reduce((sum, s) => sum + (s.end - s.start), 0);
+  countBox.textContent = `${fmtNum(totalHours)}-hour load reduction today for block ${BLOCKS[block]} · ${
+    todaySlots.length
+  } load reduction${todaySlots.length > 1 ? "s" : ""}`;
 
-  if (diffMin <= 0) {
+  const active = todaySlots.find((s) => nowMin >= s.start * 60 && nowMin < s.end * 60);
+
+  if (active) {
     nextBox.innerHTML = `
       <div class="label">Now</div>
-      <div class="value">Block ${BLOCKS[block]} is OFF &middot; ${slotWindow(next.start)}</div>
-      <div class="countdown">Back on in ${formatDuration(diffMin + SLOT_HOURS * 60)}</div>`;
+      <div class="value">Block ${BLOCKS[block]} is OFF &middot; ${fmtHour(active.start)} – ${fmtHour(active.end)}</div>
+      <div class="duration">${durationLabel(active.end - active.start)}</div>
+      <div class="countdown">Back on in ${formatDuration(active.end * 60 - nowMin)}</div>`;
   } else {
+    const next = nextOutage(block, stage, now);
+    const nextStartMin = next.dayOffset * 1440 + next.start * 60;
+    const diffMin = nextStartMin - nowMin;
     nextBox.innerHTML = `
       <div class="label">Next outage for block ${BLOCKS[block]}</div>
-      <div class="value">${next.dayOffset ? "Tomorrow " : "Today "}${slotWindow(next.start)}</div>
+      <div class="value">${next.dayOffset ? "Tomorrow " : "Today "}${fmtHour(next.start)} – ${fmtHour(next.end)}</div>
+      <div class="duration">${durationLabel(next.end - next.start)}</div>
       <div class="countdown" id="countdownText">Starts in ${formatDuration(diffMin)}</div>`;
   }
 
@@ -190,11 +207,16 @@ function renderSchedule() {
     const isPast = nowMin >= s.end * 60;
     if (isNow) li.className = "now";
     else if (isPast) li.className = "past";
-    li.innerHTML = `<span>${slotWindow(s.start)}</span><span class="tag">${
-      isNow ? "OFF NOW" : isPast ? "passed" : "upcoming"
+    const dur = s.end - s.start;
+    li.innerHTML = `<span>${fmtHour(s.start)} – ${fmtHour(s.end)}</span><span class="tag">${dur}-hour load reduction${
+      isNow ? " · OFF NOW" : isPast ? " · passed" : ""
     }</span>`;
     list.appendChild(li);
   });
+}
+
+function durationLabel(hours) {
+  return `${fmtNum(hours)}-hour load reduction`;
 }
 
 function formatDuration(totalMinutes) {

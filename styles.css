@@ -202,10 +202,25 @@ main {
   margin-top: 4px;
 }
 
+.next-outage .duration {
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 6px;
+  text-transform: capitalize;
+}
+
 .next-outage .countdown {
   color: var(--accent);
   font-size: 14px;
   margin-top: 4px;
+}
+
+.count-line {
+  margin: 14px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .outage-list {
